@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package fixbug;
+
+option cc_generic_services = true;
+
+message orderMessageResponse{
+    bytes createTime = 1;
+    int32 price = 2;
+}
+
+message orderMessageRequest{
+    bytes orderNumber = 1;
+}
+
+service OrderServiceRPC{
+    rpc check(orderMessageRequest) returns(orderMessageResponse);
+}

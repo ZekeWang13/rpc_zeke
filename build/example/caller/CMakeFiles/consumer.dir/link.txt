@@ -1,0 +1,1 @@
+/usr/bin/c++ -g -rdynamic CMakeFiles/consumer.dir/callorderservice.cc.o CMakeFiles/consumer.dir/__/checkOrder.pb.cc.o -o ../../../bin/consumer   -L/usr/local/lib  -L/home/zeke/Desktop/project/mprpc/lib  -Wl,-rpath,/usr/local/lib:/home/zeke/Desktop/project/mprpc/lib ../../../lib/libmprpc.a -lprotobuf -lmuduo_net -lmuduo_base -lpthread -lzookeeper_mt 

@@ -1,0 +1,13 @@
+D:/vsprojects/mprpc项目代码/mprpc/out/build/x64-Debug/CMakeFiles/edit_cache.dir
+D:/vsprojects/mprpc项目代码/mprpc/out/build/x64-Debug/CMakeFiles/rebuild_cache.dir
+D:/vsprojects/mprpc项目代码/mprpc/out/build/x64-Debug/src/CMakeFiles/mprpc.dir
+D:/vsprojects/mprpc项目代码/mprpc/out/build/x64-Debug/src/CMakeFiles/edit_cache.dir
+D:/vsprojects/mprpc项目代码/mprpc/out/build/x64-Debug/src/CMakeFiles/rebuild_cache.dir
+D:/vsprojects/mprpc项目代码/mprpc/out/build/x64-Debug/example/CMakeFiles/edit_cache.dir
+D:/vsprojects/mprpc项目代码/mprpc/out/build/x64-Debug/example/CMakeFiles/rebuild_cache.dir
+D:/vsprojects/mprpc项目代码/mprpc/out/build/x64-Debug/example/callee/CMakeFiles/provider.dir
+D:/vsprojects/mprpc项目代码/mprpc/out/build/x64-Debug/example/callee/CMakeFiles/edit_cache.dir
+D:/vsprojects/mprpc项目代码/mprpc/out/build/x64-Debug/example/callee/CMakeFiles/rebuild_cache.dir
+D:/vsprojects/mprpc项目代码/mprpc/out/build/x64-Debug/example/caller/CMakeFiles/consumer.dir
+D:/vsprojects/mprpc项目代码/mprpc/out/build/x64-Debug/example/caller/CMakeFiles/edit_cache.dir
+D:/vsprojects/mprpc项目代码/mprpc/out/build/x64-Debug/example/caller/CMakeFiles/rebuild_cache.dir
