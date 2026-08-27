@@ -31,4 +31,7 @@ public:
 private:
     // zk的客户端句柄
     zhandle_t *m_zhandle;
+    // 首次建立 ZooKeeper 会话时供 watcher 同步使用；生命周期必须覆盖回调线程。
+    sem_t m_connect_sem;
+    bool m_connect_sem_initialized;
 };

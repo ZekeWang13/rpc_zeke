@@ -31,6 +31,7 @@ private:
     };
     // 存储注册成功的服务对象和其服务方法的所有信息
     std::unordered_map<std::string, ServiceInfo> m_serviceMap;
+    bool m_long_connection = false;
 
     // 新的socket连接回调
     void OnConnection(const muduo::net::TcpConnectionPtr&);

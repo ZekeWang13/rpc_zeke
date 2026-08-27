@@ -5,6 +5,8 @@ link_directories(/usr/local/lib)
 cmake_minimum_required(VERSION 3.0)
 project(mprpc)
 
+option(MPRPC_ENABLE_REQUEST_TRACE "Enable verbose per-request RPC tracing" OFF)
+
 # 生成debug版本，可以进行gdb调试
 set(CMAKE_BUILD_TYPE "Debug")
 
@@ -23,3 +25,4 @@ link_directories(${PROJECT_SOURCE_DIR}/lib)
 add_subdirectory(src)
 # example包含了mprpc框架使用的示例代码
 add_subdirectory(example)
+add_subdirectory(test/benchmark)

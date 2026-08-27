@@ -12,12 +12,15 @@ void global_watcher(zhandle_t *zh, int type,
 		if (state == ZOO_CONNECTED_STATE)  // zkclient和zkserver连接成功
 		{
 			sem_t *sem = (sem_t*)zoo_get_context(zh);//把信号量加一，才连接真正成功
-            sem_post(sem);
+            if (sem != nullptr)
+            {
+                sem_post(sem);
+            }
 		}
 	}
 }
 
-ZkClient::ZkClient() : m_zhandle(nullptr)
+ZkClient::ZkClient() : m_zhandle(nullptr), m_connect_sem_initialized(false)
 {
 }
 
@@ -26,6 +29,10 @@ ZkClient::~ZkClient()
     if (m_zhandle != nullptr)
     {
         zookeeper_close(m_zhandle); // 关闭句柄，释放资源  MySQL_Conn
+    }
+    if (m_connect_sem_initialized)
+    {
+        sem_destroy(&m_connect_sem);
     }
 }
 
@@ -55,11 +62,11 @@ void ZkClient::Start()
         exit(EXIT_FAILURE);
     }
 
-    sem_t sem;
-    sem_init(&sem, 0, 0);
-    zoo_set_context(m_zhandle, &sem);
+    sem_init(&m_connect_sem, 0, 0);
+    m_connect_sem_initialized = true;
+    zoo_set_context(m_zhandle, &m_connect_sem);
 
-    sem_wait(&sem);
+    sem_wait(&m_connect_sem);
     std::cout << "zookeeper_init success!" << std::endl;
 }
 

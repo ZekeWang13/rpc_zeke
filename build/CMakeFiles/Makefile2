@@ -65,16 +65,19 @@ CMAKE_BINARY_DIR = /home/zeke/Desktop/project/mprpc/build
 # The main recursive "all" target.
 all: src/all
 all: example/all
+all: test/benchmark/all
 .PHONY : all
 
 # The main recursive "preinstall" target.
 preinstall: src/preinstall
 preinstall: example/preinstall
+preinstall: test/benchmark/preinstall
 .PHONY : preinstall
 
 # The main recursive "clean" target.
 clean: src/clean
 clean: example/clean
+clean: test/benchmark/clean
 .PHONY : clean
 
 #=============================================================================
@@ -139,6 +142,21 @@ src/preinstall:
 # Recursive "clean" directory target.
 src/clean: src/CMakeFiles/mprpc.dir/clean
 .PHONY : src/clean
+
+#=============================================================================
+# Directory level rules for directory test/benchmark
+
+# Recursive "all" directory target.
+test/benchmark/all: test/benchmark/CMakeFiles/rpc_benchmark.dir/all
+.PHONY : test/benchmark/all
+
+# Recursive "preinstall" directory target.
+test/benchmark/preinstall:
+.PHONY : test/benchmark/preinstall
+
+# Recursive "clean" directory target.
+test/benchmark/clean: test/benchmark/CMakeFiles/rpc_benchmark.dir/clean
+.PHONY : test/benchmark/clean
 
 #=============================================================================
 # Target rules for target src/CMakeFiles/mprpc.dir
@@ -217,6 +235,32 @@ consumer: example/caller/CMakeFiles/consumer.dir/rule
 example/caller/CMakeFiles/consumer.dir/clean:
 	$(MAKE) $(MAKESILENT) -f example/caller/CMakeFiles/consumer.dir/build.make example/caller/CMakeFiles/consumer.dir/clean
 .PHONY : example/caller/CMakeFiles/consumer.dir/clean
+
+#=============================================================================
+# Target rules for target test/benchmark/CMakeFiles/rpc_benchmark.dir
+
+# All Build rule for target.
+test/benchmark/CMakeFiles/rpc_benchmark.dir/all: src/CMakeFiles/mprpc.dir/all
+	$(MAKE) $(MAKESILENT) -f test/benchmark/CMakeFiles/rpc_benchmark.dir/build.make test/benchmark/CMakeFiles/rpc_benchmark.dir/depend
+	$(MAKE) $(MAKESILENT) -f test/benchmark/CMakeFiles/rpc_benchmark.dir/build.make test/benchmark/CMakeFiles/rpc_benchmark.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/zeke/Desktop/project/mprpc/build/CMakeFiles --progress-num=18,19,20 "Built target rpc_benchmark"
+.PHONY : test/benchmark/CMakeFiles/rpc_benchmark.dir/all
+
+# Build rule for subdir invocation for target.
+test/benchmark/CMakeFiles/rpc_benchmark.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/zeke/Desktop/project/mprpc/build/CMakeFiles 14
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test/benchmark/CMakeFiles/rpc_benchmark.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/zeke/Desktop/project/mprpc/build/CMakeFiles 0
+.PHONY : test/benchmark/CMakeFiles/rpc_benchmark.dir/rule
+
+# Convenience name for target.
+rpc_benchmark: test/benchmark/CMakeFiles/rpc_benchmark.dir/rule
+.PHONY : rpc_benchmark
+
+# clean rule for target.
+test/benchmark/CMakeFiles/rpc_benchmark.dir/clean:
+	$(MAKE) $(MAKESILENT) -f test/benchmark/CMakeFiles/rpc_benchmark.dir/build.make test/benchmark/CMakeFiles/rpc_benchmark.dir/clean
+.PHONY : test/benchmark/CMakeFiles/rpc_benchmark.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

@@ -11,3 +11,6 @@
 /home/zeke/Desktop/project/mprpc/build/example/caller/CMakeFiles/consumer.dir
 /home/zeke/Desktop/project/mprpc/build/example/caller/CMakeFiles/edit_cache.dir
 /home/zeke/Desktop/project/mprpc/build/example/caller/CMakeFiles/rebuild_cache.dir
+/home/zeke/Desktop/project/mprpc/build/test/benchmark/CMakeFiles/rpc_benchmark.dir
+/home/zeke/Desktop/project/mprpc/build/test/benchmark/CMakeFiles/edit_cache.dir
+/home/zeke/Desktop/project/mprpc/build/test/benchmark/CMakeFiles/rebuild_cache.dir

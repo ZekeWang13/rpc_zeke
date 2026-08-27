@@ -155,6 +155,19 @@ consumer/fast:
 	$(MAKE) $(MAKESILENT) -f example/caller/CMakeFiles/consumer.dir/build.make example/caller/CMakeFiles/consumer.dir/build
 .PHONY : consumer/fast
 
+#=============================================================================
+# Target rules for targets named rpc_benchmark
+
+# Build rule for target.
+rpc_benchmark: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 rpc_benchmark
+.PHONY : rpc_benchmark
+
+# fast build rule for target.
+rpc_benchmark/fast:
+	$(MAKE) $(MAKESILENT) -f test/benchmark/CMakeFiles/rpc_benchmark.dir/build.make test/benchmark/CMakeFiles/rpc_benchmark.dir/build
+.PHONY : rpc_benchmark/fast
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -166,6 +179,7 @@ help:
 	@echo "... consumer"
 	@echo "... mprpc"
 	@echo "... provider"
+	@echo "... rpc_benchmark"
 .PHONY : help
 
 

@@ -13,6 +13,69 @@
 #include "circuitbreaker.h"
 #include "logger.h"
 #include "servicediscovery.h"
+#include <limits>
+
+namespace
+{
+bool SendAll(int fd, const void* data, size_t size)
+{
+    const char* current = static_cast<const char*>(data);
+    while (size > 0)
+    {
+        ssize_t sent = send(fd, current, size, MSG_NOSIGNAL);
+        if (sent > 0)
+        {
+            current += sent;
+            size -= static_cast<size_t>(sent);
+            continue;
+        }
+        if (sent < 0 && errno == EINTR) continue;
+        return false;
+    }
+    return true;
+}
+
+bool RecvAll(int fd, void* data, size_t size)
+{
+    char* current = static_cast<char*>(data);
+    while (size > 0)
+    {
+        ssize_t received = recv(fd, current, size, 0);
+        if (received > 0)
+        {
+            current += received;
+            size -= static_cast<size_t>(received);
+            continue;
+        }
+        if (received < 0 && errno == EINTR) continue;
+        return false;
+    }
+    return true;
+}
+}
+
+MprpcChannel::MprpcChannel() : m_clientfd(-1)
+{
+}
+
+MprpcChannel::~MprpcChannel()
+{
+    std::lock_guard<std::mutex> lock(m_connection_mutex);
+    if (m_clientfd != -1)
+    {
+        close(m_clientfd);
+    }
+}
+
+void MprpcChannel::CloseConnection(int fd)
+{
+    close(fd);
+    if (fd == m_clientfd)
+    {
+        m_clientfd = -1;
+        m_provider_address.clear();
+    }
+}
 
 /*
 header_size + service_name method_name args_size + args
@@ -75,7 +138,8 @@ void MprpcChannel::CallMethod(const google::protobuf::MethodDescriptor* method,
     send_rpc_str += rpc_header_str; // rpcheader
     send_rpc_str += args_str; // args
 
-    // 打印调试信息
+    // 逐请求跟踪默认关闭，避免控制台 I/O 干扰正常运行和压测。
+#ifdef MPRPC_ENABLE_REQUEST_TRACE
     std::cout << "============================================" << std::endl;
     std::cout << "header_size: " << header_size << std::endl; 
     std::cout << "rpc_header_str: " << rpc_header_str << std::endl; 
@@ -83,14 +147,14 @@ void MprpcChannel::CallMethod(const google::protobuf::MethodDescriptor* method,
     std::cout << "method_name: " << method_name << std::endl; 
     std::cout << "args_str: " << args_str << std::endl; 
     std::cout << "============================================" << std::endl;
+#endif
 
-    int clientfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (-1 == clientfd)
+    const bool long_connection =
+        MprpcApplication::GetInstance().GetConfig().Load("rpcclientlongconnection") == "true";
+    std::unique_lock<std::mutex> connection_lock(m_connection_mutex, std::defer_lock);
+    if (long_connection)
     {
-        char errtxt[512] = {0};
-        sprintf(errtxt, "create socket error! errno:%d", errno);
-        controller->SetFailed(errtxt);
-        return;
+        connection_lock.lock();
     }
 
     // 读取配置文件rpcserver的信息
@@ -184,7 +248,6 @@ void MprpcChannel::CallMethod(const google::protobuf::MethodDescriptor* method,
     ProviderInfo provider;
     if (!ServiceDiscovery::GetInstance().GetProvider(service_name, method_name, provider))
     {
-        close(clientfd);
         controller->SetFailed("no available provider from local cache/zookeeper");
         breaker->OnFailure();
         return;
@@ -194,7 +257,6 @@ void MprpcChannel::CallMethod(const google::protobuf::MethodDescriptor* method,
     size_t idx = host_data.find(":");
     if (idx == std::string::npos)
     {
-        close(clientfd);
         controller->SetFailed("provider address is invalid: " + host_data);
         breaker->OnFailure();
         return;
@@ -202,31 +264,58 @@ void MprpcChannel::CallMethod(const google::protobuf::MethodDescriptor* method,
 
     std::string ip = host_data.substr(0, idx);
     uint16_t port = atoi(host_data.substr(idx + 1).c_str());
+#ifdef MPRPC_ENABLE_REQUEST_TRACE
     std::cout << "ip: [" << ip << "], port: [" << port << "]" << std::endl;
-
     LOG_INFO("selected provider node:%s addr:%s",
             provider.node_name.c_str(), provider.host_data.c_str());
+#endif
 
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = inet_addr(ip.c_str());
 
-    // 连接rpc服务节点
-    if (-1 == connect(clientfd, (struct sockaddr*)&server_addr, sizeof(server_addr)))
+    int clientfd = -1;
+    if (long_connection && m_clientfd != -1 && m_provider_address == host_data)
     {
-        close(clientfd);
-        char errtxt[512] = {0};
-        sprintf(errtxt, "connect error! errno:%d", errno);
-        controller->SetFailed(errtxt);
-
-        //熔断机制
-        breaker->OnFailure();
-        LOG_ERR("rpc connect failed, service:%s method:%s errno:%d",
-            service_name.c_str(), method_name.c_str(), errno);
-        return;
+        clientfd = m_clientfd;
     }
-    
+    else
+    {
+        if (long_connection && m_clientfd != -1)
+        {
+            CloseConnection(m_clientfd);
+        }
+
+        clientfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (clientfd == -1)
+        {
+            char errtxt[512] = {0};
+            sprintf(errtxt, "create socket error! errno:%d", errno);
+            controller->SetFailed(errtxt);
+            breaker->OnFailure();
+            return;
+        }
+
+        if (connect(clientfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1)
+        {
+            CloseConnection(clientfd);
+            char errtxt[512] = {0};
+            sprintf(errtxt, "connect error! errno:%d", errno);
+            controller->SetFailed(errtxt);
+            breaker->OnFailure();
+            LOG_ERR("rpc connect failed, service:%s method:%s errno:%d",
+                    service_name.c_str(), method_name.c_str(), errno);
+            return;
+        }
+
+        if (long_connection)
+        {
+            m_clientfd = clientfd;
+            m_provider_address = host_data;
+        }
+    }
+
     //超时控制
     struct timeval timeout;
     timeout.tv_sec = 3;
@@ -236,9 +325,9 @@ void MprpcChannel::CallMethod(const google::protobuf::MethodDescriptor* method,
     setsockopt(clientfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
     // 发送rpc请求
-    if (-1 == send(clientfd, send_rpc_str.c_str(), send_rpc_str.size(), 0))
+    if (!SendAll(clientfd, send_rpc_str.data(), send_rpc_str.size()))
     {
-        close(clientfd);
+        CloseConnection(clientfd);
         char errtxt[512] = {0};
         sprintf(errtxt, "send error! errno:%d", errno);
         controller->SetFailed(errtxt);
@@ -246,30 +335,50 @@ void MprpcChannel::CallMethod(const google::protobuf::MethodDescriptor* method,
         return;
     }
 
-    // 接收rpc请求的响应值
-    char recv_buf[1024] = {0};
-    int recv_size = 0;
-    if (-1 == (recv_size = recv(clientfd, recv_buf, 1024, 0)))
+    // 响应帧格式：response_size(4 bytes) + protobuf response。
+    uint32_t response_size = 0;
+    if (!RecvAll(clientfd, &response_size, sizeof(response_size)))
     {
-        close(clientfd);
+        CloseConnection(clientfd);
         char errtxt[512] = {0};
-        sprintf(errtxt, "recv error! errno:%d", errno);
+        sprintf(errtxt, "recv response size error! errno:%d", errno);
         controller->SetFailed(errtxt);
         breaker->OnFailure();
         return;
     }
 
-    // 反序列化rpc调用的响应数据
-    if (!response->ParseFromArray(recv_buf, recv_size))
+    if (response_size > static_cast<uint32_t>(std::numeric_limits<int>::max()))
     {
-        close(clientfd);
+        CloseConnection(clientfd);
+        controller->SetFailed("response is too large");
+        breaker->OnFailure();
+        return;
+    }
+
+    std::string response_str(response_size, '\0');
+    if (response_size > 0 && !RecvAll(clientfd, &response_str[0], response_size))
+    {
+        CloseConnection(clientfd);
         char errtxt[512] = {0};
-        sprintf(errtxt, "parse error! response_str:%s", recv_buf);
+        sprintf(errtxt, "recv response body error! errno:%d", errno);
+        controller->SetFailed(errtxt);
+        breaker->OnFailure();
+        return;
+    }
+
+    if (!response->ParseFromArray(response_str.data(), static_cast<int>(response_size)))
+    {
+        CloseConnection(clientfd);
+        char errtxt[512] = {0};
+        sprintf(errtxt, "parse response error! response_size:%u", response_size);
         controller->SetFailed(errtxt);
         breaker->OnFailure();
         return;
     }
 
     breaker->OnSuccess();
-    close(clientfd);
+    if (!long_connection)
+    {
+        CloseConnection(clientfd);
+    }
 }

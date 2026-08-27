@@ -3,6 +3,8 @@
 #include "rpcheader.pb.h"
 #include "logger.h"
 #include "zookeeperutil.h"
+#include <cstring>
+#include <limits>
 
 /*
 service_name =>  service描述   
@@ -44,6 +46,7 @@ void RpcProvider::Run()
     // 读取配置文件rpcserver的信息
     std::string ip = MprpcApplication::GetInstance().GetConfig().Load("rpcserverip");
     uint16_t port = atoi(MprpcApplication::GetInstance().GetConfig().Load("rpcserverport").c_str());
+    m_long_connection = MprpcApplication::GetInstance().GetConfig().Load("rpcserverlongconnection") == "true";
     muduo::net::InetAddress address(ip, port);
 
     // 创建TcpServer对象
@@ -139,15 +142,27 @@ void RpcProvider::OnMessage(const muduo::net::TcpConnectionPtr &conn,
                             muduo::net::Buffer *buffer, 
                             muduo::Timestamp)
 {
-    // 网络上接收的远程rpc调用请求的字符流    Login args
-    std::string recv_buf = buffer->retrieveAllAsString();
+    // TCP 是字节流；缓冲区不足一个完整帧时保留数据，等待下次回调。
+    if (buffer->readableBytes() < sizeof(uint32_t))
+    {
+        return;
+    }
 
-    // 从字符流中读取前4个字节的内容
     uint32_t header_size = 0;
-    recv_buf.copy((char*)&header_size, 4, 0);
+    memcpy(&header_size, buffer->peek(), sizeof(header_size));
+    if (header_size > 1024 * 1024)
+    {
+        LOG_ERR("rpc header is too large: %u", header_size);
+        conn->shutdown();
+        return;
+    }
+    if (buffer->readableBytes() < sizeof(uint32_t) + header_size)
+    {
+        return;
+    }
 
     // 根据header_size读取数据头的原始字符流，反序列化数据，得到rpc请求的详细信息
-    std::string rpc_header_str = recv_buf.substr(4, header_size);
+    std::string rpc_header_str(buffer->peek() + sizeof(uint32_t), header_size);
     mprpc::RpcHeader rpcHeader;
     std::string service_name;
     std::string method_name;
@@ -163,13 +178,28 @@ void RpcProvider::OnMessage(const muduo::net::TcpConnectionPtr &conn,
     {
         // 数据头反序列化失败
         std::cout << "rpc_header_str:" << rpc_header_str << " parse error!" << std::endl;
+        conn->shutdown();
         return;
     }
+
+    const size_t frame_size = sizeof(uint32_t) + header_size + args_size;
+    if (frame_size < header_size || frame_size > 64 * 1024 * 1024)
+    {
+        LOG_ERR("rpc request frame is too large");
+        conn->shutdown();
+        return;
+    }
+    if (buffer->readableBytes() < frame_size)
+    {
+        return;
+    }
+    std::string recv_buf = buffer->retrieveAsString(frame_size);
 
     // 获取rpc方法参数的字符流数据
     std::string args_str = recv_buf.substr(4 + header_size, args_size);
 
-    // 打印调试信息
+    // 逐请求跟踪默认关闭，避免控制台 I/O 成为吞吐瓶颈。
+#ifdef MPRPC_ENABLE_REQUEST_TRACE
     std::cout << "============================================" << std::endl;
     std::cout << "header_size: " << header_size << std::endl; 
     std::cout << "rpc_header_str: " << rpc_header_str << std::endl; 
@@ -177,6 +207,7 @@ void RpcProvider::OnMessage(const muduo::net::TcpConnectionPtr &conn,
     std::cout << "method_name: " << method_name << std::endl; 
     std::cout << "args_str: " << args_str << std::endl; 
     std::cout << "============================================" << std::endl;
+#endif
 
     // 获取service对象和method对象
     auto it = m_serviceMap.find(service_name);
@@ -224,12 +255,27 @@ void RpcProvider::SendRpcResponse(const muduo::net::TcpConnectionPtr& conn, goog
     std::string response_str;
     if (response->SerializeToString(&response_str)) // response进行序列化
     {
-        // 序列化成功后，通过网络把rpc方法执行的结果发送会rpc的调用方
-        conn->send(response_str);
+        if (response_str.size() > std::numeric_limits<uint32_t>::max())
+        {
+            LOG_ERR("rpc response is too large");
+            conn->shutdown();
+            return;
+        }
+
+        // 响应帧格式：response_size(4 bytes) + protobuf response。
+        uint32_t response_size = static_cast<uint32_t>(response_str.size());
+        std::string framed_response(reinterpret_cast<const char*>(&response_size),
+                                    sizeof(response_size));
+        framed_response += response_str;
+        conn->send(framed_response);
     }
     else
     {
         std::cout << "serialize response_str error!" << std::endl; 
     }
-    conn->shutdown(); // 模拟http的短链接服务，由rpcprovider主动断开连接
+    // 默认保持原短连接行为；开启后由客户端复用并在析构时关闭连接。
+    if (!m_long_connection)
+    {
+        conn->shutdown();
+    }
 }

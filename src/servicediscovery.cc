@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include <random>
 #include <unistd.h>
 
 ServiceDiscovery& ServiceDiscovery::GetInstance()
@@ -13,12 +14,17 @@ ServiceDiscovery& ServiceDiscovery::GetInstance()
 
 ServiceDiscovery::ServiceDiscovery()
 {
-    static bool seeded = false;
-    if (!seeded)
-    {
-        srand(time(nullptr) ^ getpid());
-        seeded = true;
-    }
+}
+
+namespace
+{
+size_t SelectProviderIndex(size_t count)
+{
+    // rand() has shared mutable state and races under a multithreaded load generator.
+    thread_local std::mt19937 engine(std::random_device{}());
+    std::uniform_int_distribution<size_t> distribution(0, count - 1);
+    return distribution(engine);
+}
 }
 
 void ServiceDiscovery::Start()
@@ -56,7 +62,7 @@ bool ServiceDiscovery::GetProvider(const std::string& service_name,
         if (it != m_service_cache.end() && !it->second.empty())
         {
             const auto& providers = it->second;
-            provider = providers[rand() % providers.size()];
+            provider = providers[SelectProviderIndex(providers.size())];
             return true;
         }
     }
@@ -72,7 +78,7 @@ bool ServiceDiscovery::GetProvider(const std::string& service_name,
     }
 
     const auto& providers = it->second;
-    provider = providers[rand() % providers.size()];
+    provider = providers[SelectProviderIndex(providers.size())];
     return true;
 }
 
